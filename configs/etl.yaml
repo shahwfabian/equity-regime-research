@@ -1,0 +1,51 @@
+pipeline:
+  name: equity_etl
+  version: "0.2.0"
+
+window:
+  start_date: "2010-01-01"
+  end_date: "2024-12-31"   # inclusive; data may end earlier depending on source
+
+store:
+  backend: parquet          # "parquet" | "postgres"
+  parquet_dir: data/processed/etl
+  postgres_url: "postgresql+psycopg2://localhost:5432/equity_regime"
+
+sources:
+  french:
+    enabled: true
+    cache_dir: data/raw/french
+    daily_dataset: "F-F_Research_Data_5_Factors_2x3_daily"
+    momentum_dataset: "F-F_Momentum_Factor_daily"
+    st_rev_dataset: "F-F_ST_Reversal_Factor_daily"
+    lt_rev_dataset: "F-F_LT_Reversal_Factor_daily"
+    monthly_dataset: "F-F_Research_Data_5_Factors_2x3"
+    base_url: "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp"
+
+  vix:
+    enabled: true
+    cache_dir: data/raw/vix
+    fred_series: "VIXCLS"
+    stooq_ticker: "^VIX.US"      # fallback if FRED unavailable
+    fred_api_key: ""              # leave blank → use Stooq fallback
+
+  yfinance:
+    enabled: false               # set true to pull illustrative stock data
+    cache_dir: data/raw/yfinance
+    tickers:
+      - SPY
+      - QQQ
+      - IWM
+      - GLD
+      - TLT
+    illustrative_only: true      # NEVER used for headline results
+
+logging:
+  level: INFO
+  log_file: outputs/logs/etl.log
+
+validation:
+  report_path: outputs/reports/data_validation.html
+  max_gap_days: 5
+  max_abs_return: 0.25
+  vix_ffill_limit: 1

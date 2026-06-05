@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "equity-regime-research"
-version = "0.1.0"
+version = "0.2.0"
 description = "Statistical Evaluation of Momentum, Mean Reversion, and Regime Dynamics in U.S. Equity Markets"
 requires-python = ">=3.10"
 dependencies = [
@@ -15,6 +15,12 @@ dependencies = [
     "matplotlib>=3.7",
     "pyyaml>=6.0",
     "pyarrow>=12.0",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "pandas-datareader>=0.10",
+    "yfinance>=0.2",
+    "requests>=2.28",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -25,9 +31,14 @@ dev = [
 
 [project.scripts]
 equity-regime = "equity_regime.pipeline:main_cli"
+equity-etl    = "pipeline.etl:main_cli"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["pipeline*"]
+
+[tool.setuptools.package-dir]
+"" = "."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -40,4 +51,6 @@ filterwarnings = [
     "ignore::RuntimeWarning:statsmodels",
     "ignore::statsmodels.tools.sm_exceptions.InterpolationWarning",
     "ignore:The test statistic is outside:UserWarning",
+    "ignore::FutureWarning:yfinance",
+    "ignore::FutureWarning:pandas_datareader",
 ]
