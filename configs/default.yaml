@@ -1,0 +1,49 @@
+run:
+  name: equity_regime_study
+  seed: 42
+  output_dir: outputs
+
+data:
+  start_date: "2009-01-01"
+  end_date: "2023-12-31"
+  min_history_days: 252
+  min_price: 1.0
+  winsor_low: 0.005
+  winsor_high: 0.995
+
+synthetic:
+  n_stocks: 300
+  n_days: 3780
+  n_regimes: 2
+  regime_mu: [0.0005, -0.0003]
+  regime_sigma: [0.008, 0.020]
+  transition_matrix:
+    - [0.98, 0.02]
+    - [0.10, 0.90]
+  momentum_strength: 0.04
+  reversal_strength: 0.06
+
+factors:
+  reversal_lookback: 21
+  momentum_lookback: 252
+  momentum_skip: 21
+  n_portfolios: 10
+  weighting: value
+
+regime:
+  method: markov
+  n_states: 2
+  vol_window: 63
+  vol_high_pct: 0.75
+
+stats:
+  acf_lags: 20
+  variance_ratio_q: [2, 5, 10, 20]
+  newey_west_lags: 5
+  oos_split_date: "2018-01-01"
+  embargo_days: 21
+
+report:
+  title: "Statistical Evaluation of Momentum, Mean Reversion, and Regime Dynamics in U.S. Equity Markets"
+  author: "Quantitative Research"
+  format: html

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "equity-regime-research"
+version = "0.1.0"
+description = "Statistical Evaluation of Momentum, Mean Reversion, and Regime Dynamics in U.S. Equity Markets"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "statsmodels>=0.14",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
+    "pyarrow>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+equity-regime = "equity_regime.pipeline:main_cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = ["slow: marks tests as slow (full pipeline, deselect with -m 'not slow')"]
