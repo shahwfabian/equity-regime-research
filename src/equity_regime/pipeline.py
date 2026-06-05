@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Optional
+
+# Suppress known benign numerical warnings from statsmodels EM algorithm
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels")
+warnings.filterwarnings("ignore", message="The test statistic is outside")
 
 import numpy as np
 import pandas as pd

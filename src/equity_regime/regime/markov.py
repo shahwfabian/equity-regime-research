@@ -65,16 +65,18 @@ def fit_markov_model(
         trend="c",
     )
 
-    try:
-        result = model.fit(
-            em_iter=200,
-            search_reps=5,
-            search_scale=0.5,
-            disp=False,
-        )
-    except Exception:
-        # Fallback: fewer search reps if convergence fails
-        result = model.fit(em_iter=100, search_reps=1, disp=False)
+    # Suppress divide-by-zero from EM steps where a state variance hits zero
+    # transiently — statsmodels handles these internally via NaN guards.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        try:
+            result = model.fit(
+                em_iter=200,
+                search_reps=5,
+                search_scale=0.5,
+                disp=False,
+            )
+        except Exception:
+            result = model.fit(em_iter=100, search_reps=1, disp=False)
 
     # Filtered probabilities: P(S_t | y_1..t) — TRADABLE (no future data)
     filtered_probs = result.filtered_marginal_probabilities  # shape (T, n_states)

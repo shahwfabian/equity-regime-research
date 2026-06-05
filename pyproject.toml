@@ -36,3 +36,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 markers = ["slow: marks tests as slow (full pipeline, deselect with -m 'not slow')"]
+filterwarnings = [
+    "ignore::RuntimeWarning:statsmodels",
+    "ignore::statsmodels.tools.sm_exceptions.InterpolationWarning",
+    "ignore:The test statistic is outside:UserWarning",
+]

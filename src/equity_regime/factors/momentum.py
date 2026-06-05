@@ -56,19 +56,24 @@ def compute_momentum_signal(
     # The shift(skip) guarantees cum_ret.iloc[t] uses wide.iloc[t-skip-window+1 : t-skip+1]
     # Since skip >= 1, the latest bar used is t-skip <= t-1. ✓
 
-    mom_long = cum_ret.stack().rename("mom_signal").reset_index()
-    mom_long.columns = ["date", "permno", "mom_signal"]
-    mom_long = mom_long.dropna(subset=["mom_signal"])
+    # Melt wide frame to long — faster than .stack() on large frames
+    cum_ret.index.name = "date"
+    mom_long = (
+        cum_ret.reset_index()
+        .melt(id_vars="date", var_name="permno", value_name="mom_signal")
+        .dropna(subset=["mom_signal"])
+    )
 
-    # Cross-sectional ranks and z-scores
-    def _rank(x: pd.Series) -> pd.Series:
-        return x.rank(pct=True)
-
-    def _zscore(x: pd.Series) -> pd.Series:
-        return (x - x.mean()) / (x.std() + 1e-10)
-
-    mom_long["mom_rank"] = mom_long.groupby("date")["mom_signal"].transform(_rank)
-    mom_long["mom_zscore"] = mom_long.groupby("date")["mom_signal"].transform(_zscore)
+    # Vectorised cross-sectional ranks and z-scores (no lambda in groupby transform)
+    mom_long["mom_rank"] = (
+        mom_long.groupby("date")["mom_signal"].rank(pct=True)
+    )
+    grp_stats = mom_long.groupby("date")["mom_signal"].agg(["mean", "std"])
+    mom_long = mom_long.join(grp_stats, on="date")
+    mom_long["mom_zscore"] = (
+        (mom_long["mom_signal"] - mom_long["mean"]) / (mom_long["std"] + 1e-10)
+    )
+    mom_long = mom_long.drop(columns=["mean", "std"])
 
     return mom_long.sort_values(["date", "permno"]).reset_index(drop=True)
 

@@ -1,16 +1,15 @@
-"""Decile portfolio sorts and long-short return series construction."""
+"""Decile portfolio sorts and long-short return series construction.
+
+Fully vectorised: no Python-level loops over dates.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 
 from equity_regime.config import FactorsConfig
-
-
-def _assign_deciles(signal: pd.Series, n_portfolios: int = 10) -> pd.Series:
-    """Assign cross-sectional decile ranks (1=bottom, n=top)."""
-    return pd.qcut(signal, q=n_portfolios, labels=False, duplicates="drop") + 1
 
 
 def build_portfolios(
@@ -23,83 +22,76 @@ def build_portfolios(
     """
     Build value- or equal-weighted decile portfolios and long-short series.
 
+    Fully vectorised — no Python for-loop over dates.
+
     Parameters
     ----------
     stock_day  : pd.DataFrame  with [date, permno, log_ret, mktcap]
     signal_df  : pd.DataFrame  with [date, permno, <signal_col>]
     signal_col : str           column name for the raw signal
     cfg        : FactorsConfig
-    label      : str           prefix for output column names
+    label      : str           prefix (unused, kept for API compat)
 
     Returns
     -------
-    port_rets  : pd.DataFrame  columns = [date, decile, port_ret]
-    ls_series  : pd.DataFrame  columns = [date, ls_ret]  (decile 10 - decile 1)
+    port_rets  : pd.DataFrame  [date, decile, port_ret]
+    ls_series  : pd.DataFrame  [date, ls_ret]  (top decile − bottom decile)
     """
     n_p = cfg.n_portfolios
 
-    # Merge signal with next-day returns (signal at t -> return at t+1)
-    # Signal already uses data through t-1 (no look-ahead), so we use same-day return
-    # i.e. signal at t predicts ret at t (which is the return on day t before close)
     base = stock_day[["date", "permno", "log_ret", "mktcap"]].copy()
     merged = base.merge(
         signal_df[["date", "permno", signal_col]],
         on=["date", "permno"],
         how="inner",
-    )
-    merged = merged.dropna(subset=[signal_col, "log_ret", "mktcap"])
+    ).dropna(subset=[signal_col, "log_ret", "mktcap"])
 
-    def _port_date(grp: pd.DataFrame) -> pd.DataFrame:
-        date_val = grp["date"].iloc[0]
-        if len(grp) < n_p:
-            return pd.DataFrame()
-        try:
-            grp = grp.copy()
-            grp["decile"] = _assign_deciles(grp[signal_col], n_p)
-        except ValueError:
-            return pd.DataFrame()
+    if merged.empty:
+        return (
+            pd.DataFrame(columns=["date", "decile", "port_ret"]),
+            pd.DataFrame(columns=["date", "ls_ret"]),
+        )
 
-        rows = []
-        for dec in range(1, n_p + 1):
-            sub = grp[grp["decile"] == dec]
-            if sub.empty:
-                continue
-            if cfg.weighting == "value":
-                w = sub["mktcap"] / sub["mktcap"].sum()
-                ret = (w * sub["log_ret"]).sum()
-            else:  # equal
-                ret = sub["log_ret"].mean()
-            rows.append({"date": date_val, "decile": dec, "port_ret": ret})
-        return pd.DataFrame(rows)
+    # --- Vectorised decile assignment via cross-sectional rank ---
+    # pct rank within each date → multiply by n_p → ceil → clip to [1, n_p]
+    merged["_rank"] = merged.groupby("date")[signal_col].rank(pct=True, method="first")
+    merged["decile"] = np.ceil(merged["_rank"] * n_p).clip(1, n_p).astype(int)
 
-    result_frames = []
-    for date_val, grp in merged.groupby("date"):
-        res = _port_date(grp)
-        if not res.empty:
-            result_frames.append(res)
+    # --- Vectorised weighted return per (date, decile) ---
+    if cfg.weighting == "value":
+        # weight = mktcap / sum(mktcap) within each (date, decile)
+        grp = merged.groupby(["date", "decile"])
+        mktcap_sum = grp["mktcap"].transform("sum")
+        merged["_w"] = merged["mktcap"] / mktcap_sum
+        merged["_wret"] = merged["_w"] * merged["log_ret"]
+        port_rets = (
+            merged.groupby(["date", "decile"])["_wret"]
+            .sum()
+            .rename("port_ret")
+            .reset_index()
+        )
+    else:
+        port_rets = (
+            merged.groupby(["date", "decile"])["log_ret"]
+            .mean()
+            .rename("port_ret")
+            .reset_index()
+        )
 
-    if not result_frames:
-        port_rets = pd.DataFrame(columns=["date", "decile", "port_ret"])
-        ls_series = pd.DataFrame(columns=["date", "ls_ret"])
-        return port_rets, ls_series
-
-    grouped = pd.concat(result_frames, ignore_index=True)
-    port_rets = grouped[["date", "decile", "port_ret"]].copy()
-
-    # Long-short: top decile minus bottom decile
+    # --- Long-short: top decile − bottom decile ---
     top = port_rets[port_rets["decile"] == n_p].set_index("date")["port_ret"]
     bot = port_rets[port_rets["decile"] == 1].set_index("date")["port_ret"]
     ls = (top - bot).dropna().rename("ls_ret").reset_index()
     ls.columns = ["date", "ls_ret"]
 
-    return port_rets, ls
+    return port_rets[["date", "decile", "port_ret"]], ls
 
 
 def decile_monotonicity_check(port_rets: pd.DataFrame, n_portfolios: int = 10) -> dict:
     """
     Check whether average portfolio returns are monotone across deciles.
 
-    Returns a dict with 'mean_by_decile', 'is_monotone_increasing', 'spearman_corr'.
+    Returns dict with mean_by_decile, is_monotone_increasing, spearman_corr, spearman_pval.
     """
     mean_by_dec = (
         port_rets.groupby("decile")["port_ret"].mean().sort_index()
@@ -107,15 +99,13 @@ def decile_monotonicity_check(port_rets: pd.DataFrame, n_portfolios: int = 10) -
     deciles = mean_by_dec.index.values
     rets = mean_by_dec.values
 
-    from scipy.stats import spearmanr
     rho, pval = spearmanr(deciles, rets)
-
     diffs = np.diff(rets)
     is_mono = bool(np.all(diffs >= 0))
 
     return {
         "mean_by_decile": mean_by_dec,
         "is_monotone_increasing": is_mono,
-        "spearman_corr": rho,
-        "spearman_pval": pval,
+        "spearman_corr": float(rho),
+        "spearman_pval": float(pval),
     }

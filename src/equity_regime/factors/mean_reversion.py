@@ -44,18 +44,20 @@ def compute_reversal_signal(
     past_ret = wide.rolling(window=lookback, min_periods=max(1, lookback // 2)).sum().shift(1)
     rev_signal = -past_ret  # contrarian: negative of past return
 
-    rev_long = rev_signal.stack().rename("rev_signal").reset_index()
-    rev_long.columns = ["date", "permno", "rev_signal"]
-    rev_long = rev_long.dropna(subset=["rev_signal"])
+    rev_signal.index.name = "date"
+    rev_long = (
+        rev_signal.reset_index()
+        .melt(id_vars="date", var_name="permno", value_name="rev_signal")
+        .dropna(subset=["rev_signal"])
+    )
 
-    def _rank(x: pd.Series) -> pd.Series:
-        return x.rank(pct=True)
-
-    def _zscore(x: pd.Series) -> pd.Series:
-        return (x - x.mean()) / (x.std() + 1e-10)
-
-    rev_long["rev_rank"] = rev_long.groupby("date")["rev_signal"].transform(_rank)
-    rev_long["rev_zscore"] = rev_long.groupby("date")["rev_signal"].transform(_zscore)
+    rev_long["rev_rank"] = rev_long.groupby("date")["rev_signal"].rank(pct=True)
+    grp_stats = rev_long.groupby("date")["rev_signal"].agg(["mean", "std"])
+    rev_long = rev_long.join(grp_stats, on="date")
+    rev_long["rev_zscore"] = (
+        (rev_long["rev_signal"] - rev_long["mean"]) / (rev_long["std"] + 1e-10)
+    )
+    rev_long = rev_long.drop(columns=["mean", "std"])
 
     return rev_long.sort_values(["date", "permno"]).reset_index(drop=True)
 
