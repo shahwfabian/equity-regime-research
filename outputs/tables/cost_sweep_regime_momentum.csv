@@ -1,0 +1,7 @@
+strategy,tc_bps,ann_return,ann_vol,sharpe,net_alpha_pct
+regime_momentum,0.0,0.053979,0.103913,0.4104,-0.0
+regime_momentum,5.0,0.052877,0.103923,0.3998,-0.1102
+regime_momentum,10.0,0.051776,0.103938,0.3891,-0.2203
+regime_momentum,20.0,0.049572,0.103985,0.3678,-0.4407
+regime_momentum,30.0,0.047369,0.104052,0.3464,-0.661
+regime_momentum,50.0,0.042962,0.104249,0.3034,-1.1017

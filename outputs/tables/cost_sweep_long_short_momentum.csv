@@ -1,0 +1,7 @@
+strategy,tc_bps,ann_return,ann_vol,sharpe,net_alpha_pct
+long_short_momentum,0.0,0.046914,0.153494,0.2318,-0.0
+long_short_momentum,5.0,0.046881,0.153493,0.2316,-0.0033
+long_short_momentum,10.0,0.046848,0.153492,0.2314,-0.0066
+long_short_momentum,20.0,0.046781,0.153491,0.231,-0.0133
+long_short_momentum,30.0,0.046714,0.15349,0.2305,-0.02
+long_short_momentum,50.0,0.046581,0.153489,0.2297,-0.0333

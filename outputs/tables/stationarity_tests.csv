@@ -1,0 +1,2 @@
+adf_stat,adf_pvalue,adf_lags,adf_crit_1pct,kpss_stat,kpss_pvalue,kpss_lags,is_stationary_adf,is_stationary_kpss
+-61.85705389688988,0.0,0,-3.432081608223884,0.1331080643272986,0.1,1,True,True

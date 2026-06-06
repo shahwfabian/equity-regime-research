@@ -35,7 +35,7 @@ equity-etl    = "pipeline.etl:main_cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pipeline*"]
+include = ["pipeline*", "backtest*"]
 
 [tool.setuptools.package-dir]
 "" = "."

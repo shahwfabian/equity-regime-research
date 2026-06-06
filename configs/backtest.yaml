@@ -1,0 +1,87 @@
+backtest:
+  name: equity_backtest
+  version: "1.0.0"
+
+# ── Data source ──────────────────────────────────────────────────────────────
+data:
+  source: parquet                      # "parquet" | "synthetic"
+  parquet_dir: data/processed/etl
+  synthetic_n_days: 1260               # used only when source=synthetic (~5 yr)
+  synthetic_seed: 42
+
+# ── Strategy definitions ──────────────────────────────────────────────────────
+# Each strategy maps factor weights → daily portfolio return.
+# net return = sum(w_f * r_f_excess) + rf  – cost_drag
+strategies:
+  long_only_momentum:
+    enabled: true
+    rebalance: monthly                 # "daily" | "weekly" | "monthly"
+    signal_factor: umd                 # go long when prior-period signal > 0
+
+  long_short_momentum:
+    enabled: true
+    rebalance: monthly                 # always hold UMD (unconditional)
+
+  mean_reversion:
+    enabled: true
+    rebalance: weekly                  # ST_Rev turns over quickly
+
+  regime_momentum:
+    enabled: true
+    rebalance: monthly
+    calm_exposure: 1.0                 # full long in calm (state=0)
+    turbulent_exposure: 0.0            # exit to cash in turbulent (state=1)
+    regime_source: vol_rule            # "vol_rule" – inherently causal (expanding vol pct)
+    regime_vol_pct: 0.75               # expanding percentile threshold
+
+  market_bah:
+    enabled: true
+    rebalance: monthly                 # buy-and-hold market (Mkt-RF + RF)
+
+  sixty_forty:
+    enabled: true
+    rebalance: monthly
+    mkt_weight: 0.60                   # 60 % market, 40 % cash (earns RF)
+
+# ── Transaction costs & slippage ─────────────────────────────────────────────
+costs:
+  tc_bps: 10                           # one-way TC per unit turnover (bps)
+  slippage_bps: 5                      # slippage per unit turnover (bps)
+  state_dependent_slippage: true       # turbulent → wider slippage
+  turbulent_slippage_multiplier: 2.0   # slippage multiplied in turbulent regime
+
+# ── Position sizing ──────────────────────────────────────────────────────────
+sizing:
+  vol_targeting:
+    enabled: false                     # set true to enable vol-targeting
+    target_ann_vol: 0.10               # 10 % annualised target vol
+    lookback_days: 63                  # trailing days for ex-ante vol estimate
+    max_leverage: 2.0                  # cap on gross leverage scalar
+
+# ── Walk-forward validation ───────────────────────────────────────────────────
+walkforward:
+  mode: expanding                      # "expanding" | "rolling"
+  initial_train_days: 504              # 2-year initial training window
+  test_days: 63                        # 3-month OOS test window per fold
+  step_days: 63                        # advance 63 days between folds
+  embargo_days: 21                     # trading-day gap between train and test
+
+# ── Cost sweep ───────────────────────────────────────────────────────────────
+cost_sweep:
+  enabled: true
+  bps_grid: [0, 5, 10, 20, 30, 50]    # TC grid for breakeven analysis
+
+# ── Metrics / inference ──────────────────────────────────────────────────────
+metrics:
+  bootstrap_n: 1000                    # number of block-bootstrap resamples
+  bootstrap_p: 0.10                    # stationary-bootstrap param (mean block = 10d)
+  bootstrap_seed: 42                   # reproducibility
+
+# ── Output ───────────────────────────────────────────────────────────────────
+report:
+  out_path: outputs/reports/backtest_report.html
+  tables_dir: outputs/tables
+
+logging:
+  level: INFO
+  log_file: outputs/logs/backtest.log
