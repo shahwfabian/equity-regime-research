@@ -5,9 +5,29 @@ backtest:
 # ── Data source ──────────────────────────────────────────────────────────────
 data:
   source: parquet                      # "parquet" | "synthetic"
-  parquet_dir: data/processed/etl
+  parquet_dir: data/processed/etl_full # full-history parquet (1926+)
   synthetic_n_days: 1260               # used only when source=synthetic (~5 yr)
   synthetic_seed: 42
+
+# Analysis window to use for the backtest (selects rows where required cols non-NaN)
+# "momentum_core" = [umd, mkt_rf, rf] -> 1963-07-01 to present
+# "umd_raw"       = [umd] only        -> 1926-11-03 to present (RF=0)
+analysis_window: momentum_core
+
+# Subperiod breaks for the headline comparison table
+subperiod_breaks:
+  - "1963-07-01"   # five-factor era start (also momentum_core start)
+  - "1990-01-01"   # VIX era start
+  - "2010-01-01"   # post-GFC recovery
+
+# Named crash windows for isolated regime-conditioning analysis
+crash_windows:
+  Great_Depression: {start: "1929-01-01", end: "1933-01-01"}   # pre-dates 5-factor; informational
+  Oil_Bear_1973:    {start: "1973-01-01", end: "1975-01-01"}
+  Black_Monday:     {start: "1987-07-01", end: "1988-01-01"}
+  DotCom_Bust:      {start: "2000-03-01", end: "2002-12-01"}
+  GFC:              {start: "2007-10-01", end: "2009-06-01"}
+  Covid:            {start: "2020-02-01", end: "2020-09-01"}
 
 # ── Strategy definitions ──────────────────────────────────────────────────────
 # Each strategy maps factor weights → daily portfolio return.
@@ -61,9 +81,9 @@ sizing:
 # ── Walk-forward validation ───────────────────────────────────────────────────
 walkforward:
   mode: expanding                      # "expanding" | "rolling"
-  initial_train_days: 504              # 2-year initial training window
-  test_days: 63                        # 3-month OOS test window per fold
-  step_days: 63                        # advance 63 days between folds
+  initial_train_days: 1260             # 5-year initial training window
+  test_days: 252                       # 1-year OOS test window per fold
+  step_days: 252                       # advance 1 year between folds (~57 folds on full history)
   embargo_days: 21                     # trading-day gap between train and test
 
 # ── Cost sweep ───────────────────────────────────────────────────────────────
@@ -73,7 +93,7 @@ cost_sweep:
 
 # ── Metrics / inference ──────────────────────────────────────────────────────
 metrics:
-  bootstrap_n: 1000                    # number of block-bootstrap resamples
+  bootstrap_n: 500                     # 500 resamples; CI is tight with 15k+ obs                    # number of block-bootstrap resamples
   bootstrap_p: 0.10                    # stationary-bootstrap param (mean block = 10d)
   bootstrap_seed: 42                   # reproducibility
 

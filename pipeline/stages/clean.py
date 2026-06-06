@@ -70,15 +70,19 @@ def _clean_factor_frame(
     # 3. Assert monotonic
     assert df.index.is_monotonic_increasing, f"{label}: date index is not monotonic after dedup"
 
-    # 4. Drop NaN return rows (no imputation)
+    # 4. Log NaN counts per return column (do NOT drop — ragged series are valid).
+    # Analysis-window selection (pipeline/analysis_windows.py) handles per-analysis
+    # dropna on the required columns.  Dropping here would truncate pre-1963 data.
     present_ret_cols = [c for c in return_cols if c in df.columns]
-    n_before = len(df)
-    df = df.dropna(subset=present_ret_cols)
-    n_dropped = n_before - len(df)
-    if n_dropped:
-        log.warning(
-            "[clean] %s: dropped %d rows with NaN returns (no imputation)", label, n_dropped
-        )
+    for col in present_ret_cols:
+        n_nan = int(df[col].isna().sum())
+        if n_nan:
+            first_valid = df[col].first_valid_index()
+            log.info(
+                "[clean] %s: col '%s' has %d NaN rows (native start ~%s)",
+                label, col, n_nan,
+                first_valid.date() if first_valid is not None else "unknown",
+            )
 
     # 5. Coerce all numeric cols to float64
     for col in df.select_dtypes(include="number").columns:

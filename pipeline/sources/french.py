@@ -169,25 +169,57 @@ def fetch_daily_factors(
         raw = _fetch_zip(url, cache_path, force=force)
         df = _parse_french_csv(raw, col_map, freq="D")
         frames[dataset] = df
-        log.info("Parsed %s: %d rows, cols=%s", dataset, len(df), list(df.columns))
+        log.info(
+            "Parsed %s: %d rows (%s to %s), cols=%s",
+            dataset, len(df),
+            df.index.min().date() if len(df) else "N/A",
+            df.index.max().date() if len(df) else "N/A",
+            list(df.columns),
+        )
 
-    # Merge on date index
-    base = frames[cfg.sources.french.daily_dataset]
+    # Build master index = UNION of all series (preserves ragged native starts)
+    master_idx = frames[cfg.sources.french.daily_dataset].index
     for dataset, _ in datasets[1:]:
-        other = frames[dataset]
+        master_idx = master_idx.union(frames[dataset].index)
+    master_idx = master_idx.sort_values()
+
+    # Reindex each frame to master index, then assemble column-wise
+    base_key = cfg.sources.french.daily_dataset
+    base = frames[base_key].reindex(master_idx)
+    for dataset, _ in datasets[1:]:
+        other = frames[dataset].reindex(master_idx)
         cols = [c for c in other.columns if c not in base.columns]
         if cols:
-            base = base.join(other[cols], how="left")
+            base[cols] = other[cols]
         log.info("Merged %s: added cols %s", dataset, cols)
 
-    # Window to config dates
-    start = pd.Timestamp(cfg.window.start_date)
-    end = pd.Timestamp(cfg.window.end_date)
-    base = base[(base.index >= start) & (base.index <= end)]
+    # Optional date windowing (None = keep full history)
+    if cfg.window.start_date:
+        start = pd.Timestamp(cfg.window.start_date)
+        base = base[base.index >= start]
+    if cfg.window.end_date:
+        end = pd.Timestamp(cfg.window.end_date)
+        base = base[base.index <= end]
+
+    # Log native start dates per column
+    for col in base.columns:
+        first_valid = base[col].first_valid_index()
+        last_valid  = base[col].last_valid_index()
+        nan_count   = base[col].isna().sum()
+        log.info(
+            "  col %-10s: %s to %s  (%d NaN of %d rows)",
+            col,
+            first_valid.date() if first_valid else "all-NaN",
+            last_valid.date()  if last_valid  else "all-NaN",
+            nan_count, len(base),
+        )
 
     log.info(
-        "French daily factors: %d rows, %s to %s, cols=%s",
-        len(base), base.index.min().date(), base.index.max().date(), list(base.columns),
+        "French daily factors: %d rows total (%s to %s), cols=%s",
+        len(base),
+        base.index.min().date() if len(base) else "N/A",
+        base.index.max().date() if len(base) else "N/A",
+        list(base.columns),
     )
     return base
 
@@ -205,9 +237,14 @@ def fetch_monthly_factors(
 
     raw = _fetch_zip(url, cache_path, force=force)
     df = _parse_french_csv(raw, _DAILY_5F_COLS, freq="M")
-    log.info("French monthly factors: %d rows, cols=%s", len(df), list(df.columns))
+    log.info("French monthly factors: %d rows, %s to %s, cols=%s",
+             len(df),
+             df.index.min().date() if len(df) else "N/A",
+             df.index.max().date() if len(df) else "N/A",
+             list(df.columns))
 
-    start = pd.Timestamp(cfg.window.start_date)
-    end = pd.Timestamp(cfg.window.end_date)
-    df = df[(df.index >= start) & (df.index <= end)]
+    if cfg.window.start_date:
+        df = df[df.index >= pd.Timestamp(cfg.window.start_date)]
+    if cfg.window.end_date:
+        df = df[df.index <= pd.Timestamp(cfg.window.end_date)]
     return df

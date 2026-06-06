@@ -1,0 +1,8 @@
+analysis,required,start,end,n_obs,n_years,missing_cols
+umd_raw,umd,1926-11-03,2026-04-30,26132,103.7,—
+reversal_raw,st_rev,1926-01-26,2026-04-30,26362,104.6,—
+momentum_core,"umd, mkt_rf, rf",1963-07-01,2026-04-30,15813,62.8,—
+reversal_core,"st_rev, mkt_rf, rf",1963-07-01,2026-04-30,15813,62.8,—
+five_factor,"mkt_rf, smb, hml, rmw, cma, rf",1963-07-01,2026-04-30,15813,62.8,—
+full_factor,"mkt_rf, smb, hml, rmw, cma, umd, st_rev, rf",1963-07-01,2026-04-30,15813,62.8,—
+vix_regime,"mkt_rf, rf, vix",1990-01-02,2026-04-30,9149,36.3,—

@@ -15,8 +15,8 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class WindowConfig:
-    start_date: str = "2010-01-01"
-    end_date: str = "2024-12-31"
+    start_date: Optional[str] = None   # None = earliest available per series
+    end_date:   Optional[str] = None   # None = latest available
 
 
 @dataclass
@@ -133,5 +133,6 @@ class ETLConfig:
     def validate(self) -> None:
         if self.store.backend not in ("parquet", "postgres"):
             raise ValueError(f"store.backend must be 'parquet' or 'postgres', got {self.store.backend!r}")
-        if self.window.start_date >= self.window.end_date:
-            raise ValueError("window.start_date must be before end_date")
+        if self.window.start_date and self.window.end_date:
+            if self.window.start_date >= self.window.end_date:
+                raise ValueError("window.start_date must be before end_date")

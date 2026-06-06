@@ -73,22 +73,30 @@ def transform(cleaned: CleanResult) -> TransformResult:
 
     # ---- market_daily ----
     md = cleaned.market_daily.copy()
-    mkt_ret = md["mkt_rf"] + md["rf"]   # gross market return
+    # mkt_rf and rf may be NaN for pre-1963 rows; mkt_ret is also NaN there
+    mkt_rf_col = md["mkt_rf"] if "mkt_rf" in md.columns else pd.Series(dtype="float64", name="mkt_rf")
+    rf_col     = md["rf"]     if "rf"     in md.columns else pd.Series(dtype="float64", name="rf")
+    mkt_ret = (mkt_rf_col + rf_col).astype("float64")   # NaN where either is NaN (pre-1963)
 
+    # Realized vol and drawdown are only meaningful where mkt_ret exists
     md_out = pd.DataFrame(index=md.index)
     md_out.index.name = "date"
-    md_out["mkt_ret"]          = mkt_ret.astype("float64")
-    md_out["rf"]               = md["rf"].astype("float64")
+    md_out["mkt_ret"]          = mkt_ret
+    md_out["rf"]               = rf_col.astype("float64")
     md_out["realized_vol_21"]  = _realized_vol(mkt_ret, 21).astype("float64")
     md_out["realized_vol_63"]  = _realized_vol(mkt_ret, 63).astype("float64")
-    md_out["drawdown"]         = _drawdown(mkt_ret).astype("float64")
-    md_out["vix"]              = md["vix"].astype("float64")
+    md_out["drawdown"]         = _drawdown(mkt_ret.fillna(0)).astype("float64")  # 0-filled for pre-1963
+    md_out["vix"]              = md["vix"].astype("float64") if "vix" in md.columns else float("nan")
 
+    n_mkt_nan = md_out["mkt_ret"].isna().sum()
+    n_vix_nan = md_out["vix"].isna().sum()
     log.info(
-        "[transform] market_daily: %d rows. realized_vol_21 NaN=%d, realized_vol_63 NaN=%d",
-        len(md_out),
+        "[transform] market_daily: %d rows. mkt_ret NaN=%d (pre-1963 expected), "
+        "realized_vol_21 NaN=%d, realized_vol_63 NaN=%d, vix NaN=%d (pre-1990 expected)",
+        len(md_out), n_mkt_nan,
         md_out["realized_vol_21"].isna().sum(),
         md_out["realized_vol_63"].isna().sum(),
+        n_vix_nan,
     )
 
     # ---- stock_daily (optional) ----

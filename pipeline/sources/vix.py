@@ -125,10 +125,11 @@ def fetch_vix(cfg, force: bool = False) -> pd.Series:
     if vix is None:
         raise RuntimeError("Could not fetch VIX from FRED, Stooq, or yfinance")
 
-    # Window
-    start = pd.Timestamp(cfg.window.start_date)
-    end = pd.Timestamp(cfg.window.end_date)
-    vix = vix[(vix.index >= start) & (vix.index <= end)]
+    # Optional windowing (None = full available history)
+    if cfg.window.start_date:
+        vix = vix[vix.index >= pd.Timestamp(cfg.window.start_date)]
+    if cfg.window.end_date:
+        vix = vix[vix.index <= pd.Timestamp(cfg.window.end_date)]
     vix = vix.sort_index()
 
     log.info(

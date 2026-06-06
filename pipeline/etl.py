@@ -97,6 +97,15 @@ def run_etl(
     store = load(transformed, cfg)
     log.info("[etl] Load done in %.1fs", time.time() - t0)
 
+    # ── ANALYSIS COVERAGE TABLE ───────────────────────────────────
+    from pathlib import Path as _Path
+    from pipeline.analysis_windows import print_coverage, resolve_windows
+    coverage_windows = resolve_windows(transformed.factor_daily, transformed.market_daily)
+    coverage_df = print_coverage(
+        coverage_windows,
+        save_path=_Path("outputs/tables/analysis_coverage.csv"),
+    )
+
     # ── VALIDATE ──────────────────────────────────────────────────
     from pipeline.validate.checks import run_all_checks
     from pipeline.validate.report import render_report
@@ -108,6 +117,7 @@ def run_etl(
         market_daily=transformed.market_daily,
         store=store,
         cfg=cfg,
+        coverage_df=coverage_df,
     )
     log.info("[etl] Validation done in %.1fs", time.time() - t0)
 

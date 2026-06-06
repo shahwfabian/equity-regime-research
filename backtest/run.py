@@ -43,9 +43,10 @@ class BacktestConfig:
     version: str = "1.0.0"
 
     data_source: str = "parquet"
-    parquet_dir: str = "data/processed/etl"
+    parquet_dir: str = "data/processed/etl_full"
     synthetic_n_days: int = 1260
     synthetic_seed: int = 42
+    analysis_window: str = "momentum_core"  # which factor window to use
 
     strategies_cfg: dict = field(default_factory=dict)
     costs_cfg: dict = field(default_factory=dict)
@@ -54,6 +55,10 @@ class BacktestConfig:
 
     cost_sweep_enabled: bool = True
     bps_grid: list = field(default_factory=lambda: [0, 5, 10, 20, 30, 50])
+
+    # Subperiod breakdown
+    subperiod_breaks: list = field(default_factory=lambda: ["1990-01-01", "2010-01-01"])
+    crash_windows: dict = field(default_factory=dict)
 
     bootstrap_n: int = 1000
     bootstrap_p: float = 0.10
@@ -85,15 +90,18 @@ class BacktestConfig:
             name=bt.get("name", "equity_backtest"),
             version=bt.get("version", "1.0.0"),
             data_source=data.get("source", "parquet"),
-            parquet_dir=data.get("parquet_dir", "data/processed/etl"),
+            parquet_dir=data.get("parquet_dir", "data/processed/etl_full"),
             synthetic_n_days=int(data.get("synthetic_n_days", 1260)),
             synthetic_seed=int(data.get("synthetic_seed", 42)),
+            analysis_window=data.get("analysis_window", "momentum_core"),
             strategies_cfg=strats,
             costs_cfg=costs,
             sizing_cfg=sizing,
             walkforward_cfg=wf,
             cost_sweep_enabled=bool(sweep.get("enabled", True)),
             bps_grid=list(sweep.get("bps_grid", [0, 5, 10, 20, 30, 50])),
+            subperiod_breaks=raw.get("subperiod_breaks", ["1990-01-01", "2010-01-01"]),
+            crash_windows=raw.get("crash_windows", {}),
             bootstrap_n=int(metrics_cfg.get("bootstrap_n", 1000)),
             bootstrap_p=float(metrics_cfg.get("bootstrap_p", 0.10)),
             bootstrap_seed=int(metrics_cfg.get("bootstrap_seed", 42)),
@@ -108,18 +116,51 @@ class BacktestConfig:
 # Data loading
 # ---------------------------------------------------------------------------
 def load_data(cfg: BacktestConfig) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return (factor_daily, market_daily) from parquet or synthetic source."""
+    """Return (factor_daily, market_daily) filtered to the analysis window.
+
+    The analysis window selects rows where all required columns are non-NaN,
+    enforcing the native start date of each series without truncating the
+    other series unnecessarily.
+    """
     if cfg.data_source == "parquet":
         pdir = Path(cfg.parquet_dir)
         fd_path = pdir / "factor_daily.parquet"
         md_path = pdir / "market_daily.parquet"
         if fd_path.exists() and md_path.exists():
-            fd = pd.read_parquet(fd_path)
-            md = pd.read_parquet(md_path)
+            fd_full = pd.read_parquet(fd_path)
+            md_full = pd.read_parquet(md_path)
             log.info(
-                "[data] Loaded parquet: factor_daily=%d rows, market_daily=%d rows",
-                len(fd), len(md),
+                "[data] Loaded parquet: factor_daily=%d rows (%s to %s), "
+                "market_daily=%d rows",
+                len(fd_full),
+                fd_full.index.min().date(), fd_full.index.max().date(),
+                len(md_full),
             )
+
+            # Apply analysis-window filtering
+            from pipeline.analysis_windows import resolve_windows
+            windows = resolve_windows(fd_full, md_full)
+            win_info = windows.get(cfg.analysis_window)
+            if win_info and win_info["n_obs"] > 0:
+                fd = win_info["df"].copy()
+                # Add any other factor columns not in required but present in full data
+                for col in fd_full.columns:
+                    if col not in fd.columns:
+                        fd[col] = fd_full[col].reindex(fd.index)
+                # market_daily: align to the analysis window dates
+                md = md_full.reindex(fd.index)
+                log.info(
+                    "[data] Analysis window '%s': %d rows (%s to %s)",
+                    cfg.analysis_window, len(fd),
+                    fd.index.min().date(), fd.index.max().date(),
+                )
+            else:
+                log.warning(
+                    "[data] Analysis window '%s' not found or empty — using full data",
+                    cfg.analysis_window,
+                )
+                fd, md = fd_full, md_full
+
             return fd, md
         else:
             log.warning("[data] Parquet not found at %s — falling back to synthetic", pdir)
@@ -377,7 +418,75 @@ def run_backtest(cfg: BacktestConfig) -> dict:
             f"{'='*60}\n"
         )
 
-    # ── 5. Save tables ────────────────────────────────────────────────────────
+    # ── 5. Subperiod & crash-window breakdown ────────────────────────────────
+    subperiod_rows = []
+    crash_rows = []
+
+    key_strats = {n: full_run_results[n] for n in [regime_strat_name, ls_strat_name]
+                  if n in full_run_results}
+
+    # Define subperiods
+    all_dates = factor_daily.index
+    breaks = [all_dates.min()] + [pd.Timestamp(b) for b in cfg.subperiod_breaks] + [all_dates.max()]
+    subperiod_labels = []
+    for i in range(len(breaks) - 1):
+        a = breaks[i].year
+        b = breaks[i + 1].year
+        subperiod_labels.append(f"{a}-{b}")
+
+    for strat_name, run_res in key_strats.items():
+        rets = run_res.net_returns
+        bench_aligned = benchmark_ret.reindex(rets.index).fillna(0.0)
+        rf_aligned = rf_series.reindex(rets.index).fillna(0.0)
+
+        # Subperiods
+        for i in range(len(breaks) - 1):
+            t0, t1 = breaks[i], breaks[i + 1]
+            sub = rets[(rets.index >= t0) & (rets.index <= t1)]
+            if len(sub) < 60:
+                continue
+            sub_bench = bench_aligned.reindex(sub.index).fillna(0.0)
+            sub_rf = rf_aligned.reindex(sub.index).fillna(0.0)
+            m = compute_metrics(
+                sub, sub_bench, sub_rf,
+                strategy_name=strat_name, period=subperiod_labels[i],
+                bootstrap_n=min(cfg.bootstrap_n, 200),
+                bootstrap_p=cfg.bootstrap_p, bootstrap_seed=cfg.bootstrap_seed,
+            )
+            subperiod_rows.append(m.to_dict())
+
+        # Crash windows
+        for crash_name, crash_cfg in cfg.crash_windows.items():
+            cs = pd.Timestamp(crash_cfg["start"])
+            ce = pd.Timestamp(crash_cfg["end"])
+            sub = rets[(rets.index >= cs) & (rets.index <= ce)]
+            if len(sub) < 5:
+                continue
+            sub_bench = bench_aligned.reindex(sub.index).fillna(0.0)
+            sub_rf = rf_aligned.reindex(sub.index).fillna(0.0)
+            m = compute_metrics(
+                sub, sub_bench, sub_rf,
+                strategy_name=strat_name, period=crash_name,
+                bootstrap_n=50, bootstrap_p=0.5, bootstrap_seed=cfg.bootstrap_seed,
+            )
+            crash_rows.append(m.to_dict())
+
+    subperiod_df = pd.DataFrame(subperiod_rows) if subperiod_rows else pd.DataFrame()
+    crash_df = pd.DataFrame(crash_rows) if crash_rows else pd.DataFrame()
+
+    if len(subperiod_df):
+        log.info("\n[backtest] Subperiod breakdown:\n%s",
+                 subperiod_df[["strategy","period","sharpe","ann_return","max_drawdown"]].to_string(index=False))
+        print("\n=== SUBPERIOD BREAKDOWN (regime vs unconditional) ===")
+        print(subperiod_df[["strategy","period","ann_return","sharpe","max_drawdown"]].to_string(index=False))
+
+    if len(crash_df):
+        log.info("\n[backtest] Crash-window breakdown:\n%s",
+                 crash_df[["strategy","period","sharpe","ann_return","max_drawdown"]].to_string(index=False))
+        print("\n=== CRASH-WINDOW BREAKDOWN ===")
+        print(crash_df[["strategy","period","ann_return","sharpe","max_drawdown"]].to_string(index=False))
+
+    # ── 6. Save tables ────────────────────────────────────────────────────────
     tables_dir = Path(cfg.tables_dir)
     tables_dir.mkdir(parents=True, exist_ok=True)
 
@@ -385,6 +494,10 @@ def run_backtest(cfg: BacktestConfig) -> dict:
     oos_df = metrics_table(oos_metrics_all)
     is_df.to_csv(tables_dir / "metrics_in_sample.csv")
     oos_df.to_csv(tables_dir / "metrics_oos.csv")
+    if len(subperiod_df):
+        subperiod_df.to_csv(tables_dir / "metrics_subperiod.csv", index=False)
+    if len(crash_df):
+        crash_df.to_csv(tables_dir / "metrics_crash_windows.csv", index=False)
 
     for name, sweep in sweep_results.items():
         sweep.to_csv(tables_dir / f"cost_sweep_{name}.csv", index=False)
@@ -402,6 +515,8 @@ def run_backtest(cfg: BacktestConfig) -> dict:
         "sweep_results": sweep_results,
         "lw_result": lw_result,
         "full_run_results": full_run_results,
+        "subperiod_df": subperiod_df,
+        "crash_df": crash_df,
         "elapsed_s": elapsed,
     }
 

@@ -3,13 +3,36 @@ pipeline:
   version: "0.2.0"
 
 window:
-  start_date: "2010-01-01"
-  end_date: "2024-12-31"   # inclusive; data may end earlier depending on source
+  start_date: null           # null = earliest available per series (full history)
+  end_date: null             # null = latest available
 
 store:
-  backend: parquet          # "parquet" | "postgres"
-  parquet_dir: data/processed/etl
+  backend: parquet           # "parquet" | "postgres"
+  parquet_dir: data/processed/etl_full   # separate dir so 2010-era results are preserved
   postgres_url: "postgresql+psycopg2://localhost:5432/equity_regime"
+
+# Analysis-window definitions: each window specifies required columns.
+# The ETL pipeline computes which date range is valid for each analysis
+# (rows where ALL required columns are non-NaN) and logs a coverage table.
+analysis_windows:
+  momentum_core:
+    required: [umd, mkt_rf, rf]          # 5-factor + UMD; ~1963-07 to present
+    description: "Momentum (UMD) analysis"
+  reversal_core:
+    required: [st_rev, mkt_rf, rf]       # 5-factor + ST_Rev; ~1963-07 to present
+    description: "Short-term reversal analysis"
+  five_factor:
+    required: [mkt_rf, smb, hml, rmw, cma, rf]   # full 5-factor; 1963-07 to present
+    description: "Full 5-factor analysis"
+  full_factor:
+    required: [mkt_rf, smb, hml, rmw, cma, umd, st_rev, rf]
+    description: "5-factor + momentum + reversal"
+  vix_regime:
+    required: [mkt_rf, rf, vix]          # VIX available from 1990-01-02
+    description: "VIX-regime robustness (1990+)"
+  umd_raw:
+    required: [umd]                      # UMD alone; 1926-11-03 to present
+    description: "Raw UMD momentum (1926+, RF=0 assumed pre-1963)"
 
 sources:
   french:
