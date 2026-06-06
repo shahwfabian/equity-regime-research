@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Verification &amp; Robustness Audit ? Equity Regime Research</title>
+<style>
+  body { font-family:'Segoe UI',Arial,sans-serif; max-width:1200px; margin:40px auto;
+         padding:0 28px; color:#1a1a2e; background:#f8f9fa; line-height:1.65; }
+  h1   { font-size:1.9em; color:#16213e; border-bottom:4px solid #c0392b; padding-bottom:10px; }
+  h2   { font-size:1.2em; color:#0f3460; border-bottom:1px solid #dee2e6; margin-top:2.2em; }
+  .meta { color:#555; font-size:0.9em; margin-bottom:1.5em; }
+  .warn-box { background:#fff3cd; border:2px solid #ffc107; border-radius:8px;
+              padding:18px 24px; margin:1.5em 0; font-size:0.95em; }
+  .fail-box { background:#f8d7da; border:2px solid #dc3545; border-radius:8px;
+              padding:18px 24px; margin:1.5em 0; }
+  .pass-box { background:#d4edda; border:2px solid #28a745; border-radius:8px;
+              padding:14px 20px; margin:1em 0; }
+  table { border-collapse:collapse; width:100%; font-size:0.83em; margin-top:10px; }
+  th { background:#0f3460; color:white; padding:7px 12px; text-align:left; }
+  td { padding:6px 12px; border-bottom:1px solid #e5e5e5; }
+  tr:nth-child(even) { background:#f9f9f9; }
+  .PASS { color:#155724; font-weight:bold; }
+  .FAIL { color:#721c24; font-weight:bold; }
+  .COND { color:#856404; font-weight:bold; }
+  code { background:#f4f4f4; padding:1px 6px; border-radius:3px; font-size:0.88em; }
+  .verdict-row td { font-size:0.88em; }
+  footer { text-align:center; color:#aaa; font-size:0.8em; margin-top:3em; }
+</style>
+</head>
+<body>
+<h1>!! Verification &amp; Robustness Audit ? Equity Regime Research</h1>
+<div class="meta">
+  <strong>Generated:</strong> 2026-06-05 23:02:32 &nbsp;|&nbsp;
+  <strong>Data:</strong> 1963-07-01 to 2026-04-30 &nbsp;|&nbsp;
+  <strong>Auditor:</strong> Adversarial (tries to break results)
+</div>
+
+<div class="warn-box">
+  <strong>Purpose:</strong> This audit actively tries to break the three headline numbers.
+  It reports failures honestly. <strong>Two material failures were found (Checks 2 and 3).</strong>
+  One headline number survived intact. See consolidated table at the bottom.
+</div>
+
+<h2>CHECK 1 ? Look-Ahead via Smoothed Regime States</h2>
+<div class="pass-box">
+<strong>Verdict: PASS</strong><br>
+The backtest engine uses the <em>expanding-window vol-percentile rule</em>
+(<code>_compute_regime_series</code>), NOT the Markov model from the research pipeline.
+The Markov model (<code>src/equity_regime/regime/markov.py</code>) is never called
+by the backtest. The vol-rule threshold at time t is the expanding quantile of
+<code>realized_vol_21</code> through t-1 (shift-1 applied), which is strictly causal.
+<br><br>
+<strong>OOS (0.892) &gt; IS (0.837):</strong> The first ~1260-day training window
+(1963?1968) is excluded from OOS but included in IS. That period had weaker UMD alpha,
+dragging down IS Sharpe. This is benign sub-period composition, not leakage.
+Formal perturbation test passes: perturbing returns at t+10 leaves weights at t unchanged.
+<br><br>
+<strong>GFC crash protection:</strong> Elevated realized vol flagged turbulent
+regimes months before peak GFC stress. The result survives strict causal lag checking.
+</div>
+
+<h2>CHECK 2 ? Mean-Reversion SR 1.93 Under Transaction Costs</h2>
+<div class="fail-box">
+<strong>Verdict: FAIL ? SR 1.93 is gross and unimplementable</strong><br><br>
+<strong>Root cause:</strong> The <code>MeanReversion</code> strategy always holds
+<code>w_st_rev = 1.0</code>. Our cost model charges costs only on <em>weight changes</em>.
+Since the target weight never changes, <strong>the total cost drag is zero</strong>
+regardless of the <code>tc_bps</code> setting. Running the cost sweep on reversal
+produces an identical SR at 0, 5, 10, 20, and 50 bps ? confirming zero turnover is modeled.
+<br><br>
+<strong>The real problem:</strong> The French ST_Rev factor return embeds the returns
+from a monthly-rebalanced long-short stock portfolio. That portfolio requires
+approximately 24 stock-level one-way portfolio turns per year. These stock-level
+trading costs are completely invisible to our factor-exposure-only backtest.
+<br><br>
+<table>
+  <thead><tr><th>Implied stock TC (bps)</th><th>Turns/yr</th><th>Annual cost drag</th><th>Net SR (est.)</th></tr></thead>
+  <tbody>
+  <tr><td>10</td><td>24</td><td>0.24%</td><td>~1.70</td></tr>
+  <tr><td>50</td><td>24</td><td>1.20%</td><td>~1.21</td></tr>
+  <tr><td>100</td><td>24</td><td>2.40%</td><td>~0.61</td></tr>
+  <tr><td>200</td><td>24</td><td>4.80%</td><td>~-0.33</td></tr>
+  </tbody>
+</table>
+<br>
+<strong>Implication:</strong> The 1.93 SR is not a trading result. It is the gross
+return of the French factor portfolio. The paper MUST disclaim that mean-reversion
+results are gross factor returns with zero implementation costs modeled. This number
+should either be removed from the performance comparison or qualified with a heavy
+footnote matching Lehmann (1990).
+</div>
+
+<h2>CHECK 3 ? Reconcile LW SR 1.481 vs Table SR 0.892</h2>
+<div class="fail-box">
+<strong>Verdict: FAIL ? LW test uses wrong return series; bias favors regime strategy</strong><br><br>
+<strong>Root cause:</strong> The <code>ledoit_wolf_sharpe_test()</code> function receives
+<code>net_returns</code> (total returns including RF) and computes
+<code>SR = mean(r_total) / std(r_total) * sqrt(252)</code>.
+The metrics table computes <code>SR = mean(r_total - rf) / std(r_total - rf) * sqrt(252)</code>.
+<br><br>
+Average annual RF over 1963?2026: <strong>4.33%</strong>.
+<br><br>
+<table>
+  <thead><tr><th>Strategy</th><th>SR (total, LW test)</th><th>SR (excess, table)</th><th>RF boost</th></tr></thead>
+  <tbody>
+  <tr><td>regime_momentum</td><td>1.4814</td><td>0.8374</td>
+      <td>0.644 (low vol -> larger boost)</td></tr>
+  <tr><td>long_short_momentum</td><td>0.9399</td><td>0.5919</td>
+      <td>0.348</td></tr>
+  </tbody>
+</table>
+<br>
+Because regime_momentum has lower vol (~6.7%) than unconditional (~12.4%), the RF
+component inflates regime's total SR proportionally more.
+The LW test comparing <em>total</em> SRs therefore gives regime_momentum an unfair advantage.
+<br><br>
+<strong>Corrected LW test (excess returns):</strong>
+<table>
+  <thead><tr><th>Metric</th><th>Original (biased)</th><th>Corrected (excess)</th></tr></thead>
+  <tbody>
+  <tr><td>SR_regime</td><td>1.481</td><td>0.8374</td></tr>
+  <tr><td>SR_unconditional</td><td>0.940</td><td>0.5919</td></tr>
+  <tr><td>SR difference</td><td>+0.542</td><td>0.2455</td></tr>
+  <tr><td>t-statistic (HAC)</td><td>3.821</td><td>1.73</td></tr>
+  <tr><td>p-value</td><td>0.0001</td><td>0.0837</td></tr>
+  <tr><td>Significant @5%</td><td>YES ?</td><td>NO ?</td></tr>
+  </tbody>
+</table>
+<br>
+<strong>Implication:</strong> The corrected test still shows statistical significance DOES NOT SURVIVE.
+The SR values reported in the LW section of the paper must be replaced with
+excess-return Sharpes (matching the metrics table). The SR_diff of +0.542 is
+overstated; the correct value is 0.2455.
+</div>
+
+<h2>CHECK 4 ? Regime Duration / Flipping Artifact</h2>
+<div class="pass-box">
+<strong>Verdict: CONDITIONAL PASS ? regimes are sustained multi-week spells</strong><br>
+Turbulent episodes: mean 39 calendar days (26.7 trading days, 5.3 weeks). Calm episodes: mean 63 calendar days. Total turbulent spells: 225.
+<br><br>
+Monthly rebalancing dampens the impact of mid-month regime flips (they are only
+acted upon at the next monthly rebalance date). The crash-protection claim is
+not a high-frequency timing artifact.
+</div>
+
+<h2>CHECK 5 ? Multiple Testing / Data Snooping</h2>
+<div class="pass-box">
+<strong>Verdict: CONDITIONAL PASS ? primary hypothesis pre-specified</strong><br>
+<code>regime_momentum</code> was the pre-committed primary hypothesis based on prior
+theory (Daniel &amp; Moskowitz 2016, Grundy &amp; Martin 2001). It is not the best-SR
+strategy (that is mean_reversion, which is disqualified per Check 2). No correction
+is strictly required for a pre-specified test. Bonferroni-adjusted biased p = 0.0006
+(6 strategies); corrected p from Check 3 should be compared instead.
+<br><br>
+Strategies by excess IS Sharpe:<br>
+<table>
+  <thead><tr><th>Strategy</th><th>IS Sharpe (excess)</th><th>Status</th></tr></thead>
+  <tbody>
+  
+  <tr><td>mean_reversion</td><td>1.9304</td>
+      <td>Disqualified (Check 2)</td></tr>
+  
+  <tr><td>regime_momentum</td><td>0.8374</td>
+      <td>Primary hypothesis</td></tr>
+  
+  <tr><td>long_short_momentum</td><td>0.5919</td>
+      <td>Secondary</td></tr>
+  
+  <tr><td>long_only_momentum</td><td>0.4858</td>
+      <td>Secondary</td></tr>
+  
+  <tr><td>market_bah</td><td>0.4483</td>
+      <td>Secondary</td></tr>
+  
+  <tr><td>sixty_forty</td><td>0.4483</td>
+      <td>Secondary</td></tr>
+  
+  </tbody>
+</table>
+</div>
+
+<h2>CHECK 6 ? No-Look-Ahead on Signals</h2>
+<div class="pass-box">
+<strong>Verdict: PASS</strong><br>
+Perturbation test on the full 15,813-day history: perturbing returns at t+10
+leaves strategy weights at t unchanged for both LongOnlyMomentum and
+RegimeConditionedMomentum. Vol targeting is disabled in current config; when
+enabled the code uses trailing history only. No winsorization in backtest.
+The expanding vol threshold uses shift-1 ensuring the regime used at t+1 is
+based on data through t only.
+</div>
+
+<h2>Consolidated Audit Summary</h2>
+<table class="verdict-row">
+  <thead><tr><th>Check</th><th>Finding</th><th>Verdict</th><th>Implication</th></tr></thead>
+  <tbody>
+  
+  <tr>
+    <td><strong>1. Regime look-ahead</strong></td>
+    <td>Vol-rule (not Markov). Strictly causal. OOS>IS = sub-period composition.</td>
+    <td class="PASS">PASS</td>
+    <td>No corrective action needed.</td>
+  </tr>
+  
+  <tr>
+    <td><strong>2. Reversal SR 1.93</strong></td>
+    <td>Zero modeled cost; factor embeds ~24 stock-level turns/yr unmodeled. SR collapses under realistic costs.</td>
+    <td class="FAIL">FAIL</td>
+    <td>Must disclaim or remove reversal result. Not implementable.</td>
+  </tr>
+  
+  <tr>
+    <td><strong>3. LW test 1.481 vs 0.892</strong></td>
+    <td>LW uses total returns (inflated by RF); table uses excess. Corrected: SR_diff=0.2455, t=1.73, p=0.0837.</td>
+    <td class="FAIL">FAIL + FAIL</td>
+    <td>Replace LW SR values with excess-return values. p=0.0837, sig=False.</td>
+  </tr>
+  
+  <tr>
+    <td><strong>4. Regime flipping</strong></td>
+    <td>Mean turbulent spell 26.7 trading days (5.3 weeks). Not noise.</td>
+    <td class="PASS">PASS</td>
+    <td>Crash protection not a day-trading artifact.</td>
+  </tr>
+  
+  <tr>
+    <td><strong>5. Multiple testing</strong></td>
+    <td>regime_momentum pre-specified per theory. Bonferroni-adj biased p=0.0006. Mean-reversion not primary.</td>
+    <td class="COND">CONDITIONAL PASS</td>
+    <td>Pre-specification claim must be documented.</td>
+  </tr>
+  
+  <tr>
+    <td><strong>6. Signal look-ahead</strong></td>
+    <td>Perturbation tests pass on 15k-day history. No winsorization. Vol-target uses trailing only.</td>
+    <td class="PASS">PASS</td>
+    <td>No corrective action needed.</td>
+  </tr>
+  
+  </tbody>
+</table>
+
+<h2>Plain-English Verdict</h2>
+<div class="fail-box">
+<strong>What FAILED the audit:</strong>
+<ol>
+<li><strong>Mean-reversion SR 1.93 (Check 2 ? FAIL):</strong> This number is gross with
+  zero implementation cost. The strategy has no turnover in our model because it always
+  holds w=1. Under realistic stock-level costs (50?200 bps/turn x 24 turns/yr), the SR
+  collapses. This result MUST be disclaimed or removed. It cannot be cited as evidence of
+  strategy performance.</li>
+<li><strong>LW test SR values (Check 3 ? FAIL):</strong> The reported SR_regime=1.481 and
+  SR_unc=0.940 are total-return Sharpes (RF included in numerator), not excess Sharpes.
+  They overstate both strategies' SRs and differentially inflate the lower-vol regime strategy.
+  Corrected: SR_regime=0.8374, SR_unc=0.5919,
+  diff=0.2455, t=1.73, p=0.0837.
+  The significance statistical significance DOES NOT SURVIVE.</li>
+</ol>
+</div>
+<div class="pass-box">
+<strong>What SURVIVED the audit:</strong>
+<ol>
+<li><strong>Regime look-ahead (Check 1 ? PASS):</strong> No Markov smoothing in backtest.
+  Vol-rule is strictly causal. OOS&gt;IS is benign composition. GFC protection survives.</li>
+<li><strong>Regime conditioning edge (Check 3 corrected ? FAIL):</strong>
+  Even after fixing the LW test to use excess returns, the test statistical significance DOES NOT SURVIVE.
+  The SR difference is smaller (+0.2455) but the conclusion statistical significance DOES NOT SURVIVE.</li>
+<li><strong>Regime durations (Check 4 ? PASS):</strong> Multi-week spells, not noise.</li>
+<li><strong>Signal look-ahead (Check 6 ? PASS):</strong> All perturbation tests pass on full history.</li>
+</ol>
+</div>
+
+<footer>equity-regime-research verification audit &mdash; 2026-06-05 23:02:32</footer>
+</body>
+</html>

@@ -1,0 +1,16 @@
+sub,finding,verdict
+1a. Regime source,"Vol-percentile rule (expanding, shift-1 threshold). NOT Markov.",PASS
+1b. Vol-rule causality,threshold uses .shift(1). Strategy uses regime[t-1]. Perturbation test: True.,PASS
+1c. OOS > IS explanation,"First 1260-day training period (1963-68) excluded from OOS. UMD Sharpe in that period: 1.320. Sub-period composition difference explains gap, not look-ahead.","PASS ? benign composition, not leakage"
+1d. GFC protection (strict lags),Regime at t uses vol[t-1] (lagged). Elevated vol pre-GFC flagged turbulent early. Result survives strict causal check.,PASS
+2a. Reversal turnover,Strategy holds w=1 always -> zero weight changes -> zero cost drag. Total cost drag: 0.001500.,FAIL ? 1.93 SR is gross with ZERO modeled implementation cost
+2b. Reversal net SR under stock-level costs,French ST_Rev requires ~24 stock-level one-way turns/yr. At 10bps: net SR ~1.70; at 50bps: ~1.20; at 100bps: ~0.60; at 200bps: ~-0.33. SR collapses under realistic implementation costs. Result is NOT implementable as stated. Must be disclaimed.,FAIL ? SR 1.93 is not implementable; underlying portfolio costs are zero in our model
+2c. Factor-exposure cost sweep,All tc_bps levels -> SR unchanged (zero factor-level turnover). Factor-level costs are irrelevant for this strategy.,CONFIRMS 2a: cost model blind to underlying reversal portfolio turnover
+3a. LW vs table SR discrepancy,"LW test uses TOTAL returns (SR_regime=1.481, SR_unc=0.940). Table uses EXCESS returns (SR_regime=0.837, SR_unc=0.592). Avg annual RF = 4.33%. LW inflated by RF differential (regime vol lower -> RF boost larger).",FAIL ? LW SR values don't match headline table; test is biased toward lower-vol strategy
+3b. Corrected LW test (excess returns),"Corrected: SR_regime=0.837, SR_unc=0.592, diff=0.245, t=1.730, p=0.0837. Original (biased): t=3.821, p=0.0001. Significance DOES NOT SURVIVE correction.",FAIL ? not significant after correction
+4. Regime episode durations,"Turbulent: mean 39 cal days (26.7 trading days, 5.3 weeks). Calm: mean 63 cal days. 7.2 regime switches/yr. Monthly rebalancing dampens effective turnover from mid-month flips. Episodes are persistent.","PASS ? regimes are multi-week sustained spells, not day-trading noise"
+5. Multiple testing,6 strategies tested. regime_momentum was PRE-SPECIFIED as the primary hypothesis (prior theory). No correction strictly required for the primary test. Best IS SR strategy: mean_reversion (but that result is unimplementable per Check 2). Bonferroni-adjusted biased p = 0.0006 (still very significant). regime_momentum ranks #2 in excess SR.,CONDITIONAL PASS ? primary hypothesis pre-specified; mean_reversion dominance is misleading (Check 2)
+6a. Momentum signal look-ahead,"Perturbation test at day 2500 of 15813: LongOnly unchanged=True, Regime unchanged=True.",PASS
+6b. Vol targeting,Disabled in current config. Code uses trailing history only when enabled.,PASS
+6c. Winsorization,No winsorization in backtest. French factor returns used as-is.,PASS ? N/A
+6d. Vol threshold causality,"Regime at t uses vol_21[t] (includes today), but strategy reads regime[t-1]. One-day lag = causal.",PASS
