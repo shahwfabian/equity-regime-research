@@ -1,0 +1,5 @@
+Strategy,Ann. Excess Return (%),Ann. Vol (%),Sharpe Ratio,Max Drawdown (%),Skewness,Excess Kurtosis
+Regime-conditioned momentum,9.94,6.71,0.8374,-14.1,-0.419,8.5
+Unconditional L/S momentum,11.68,12.42,0.5919,-63.3,-1.257,18.09
+Market (buy-and-hold),11.6,16.22,0.4483,-54.6,-0.491,15.6
+60/40,8.69,9.73,0.4483,-35.5,-0.496,15.6

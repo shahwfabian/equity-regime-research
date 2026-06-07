@@ -1,0 +1,4 @@
+Subperiod,Regime SR,Uncond SR,SR Diff,Edge,Regime Ann.Ret,Regime Ann.Vol,Uncond Ann.Ret,Uncond Ann.Vol
+"1963-1990 (crisis-rich: oil shock, Black Monday)",1.0916,1.1238,-0.0322,Uncond leads,12.23,5.17,15.28,7.74
+1990-2010 (dot-com bust + GFC),1.0556,0.5303,0.5253,Regime leads,9.48,5.47,11.41,14.52
+"2010-2026 (post-GFC, low-vol era)",0.5578,0.3078,0.25,Regime leads,6.8,9.66,6.16,15.44
