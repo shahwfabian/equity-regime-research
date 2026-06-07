@@ -1,0 +1,5 @@
+strategy,spec,alpha_ann,alpha_ann_pct,alpha_t,alpha_sig,adj_r2,n_obs,nw_lags,beta_mkt_rf,t_mkt_rf,beta_smb,t_smb,beta_hml,t_hml,beta_rmw,t_rmw,beta_cma,t_cma,beta_umd,t_umd
+Unconditional L/S momentum,CAPM,0.08,8.001,4.339,***,0.0135,15813,21,-0.0893,-2.68,,,,,,,,,,
+Unconditional L/S momentum,FF5+Mom,-0.0,-0.003,-1.0,,1.0,15813,21,0.0,0.992,-0.0,-0.729,0.0,0.997,0.0,0.96,-0.0,-0.997,1.0,99029.238
+Regime-conditioned momentum,CAPM,0.0524,5.235,5.209,***,0.016,15813,21,0.0524,6.487,,,,,,,,,,
+Regime-conditioned momentum,FF5+Mom,0.0295,2.953,3.348,***,0.34,15813,21,0.0685,6.255,0.0123,0.799,0.0852,3.878,-0.0421,-1.542,-0.1371,-5.33,0.3221,12.913
