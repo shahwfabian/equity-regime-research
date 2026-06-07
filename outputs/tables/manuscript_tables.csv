@@ -1,0 +1,26 @@
+table_id,Strategy,Ann. Excess Return (%),Ann. Vol (%),IS Sharpe,OOS Sharpe,Max Drawdown (%),Skewness,Excess Kurtosis,Ann. Turnover,Crisis episode,Regime MDD (%),Unconditional MDD (%),"Difference (regime - uncond, pp)",Subperiod,Regime Sharpe,Uncond. Sharpe,Diff (Reg - Unc),Edge,Regime Ann. Ret (%),Regime Ann. Vol (%),Uncond. Ann. Ret (%),Uncond. Ann. Vol (%),Spec,Alpha (% p.a.),Alpha t-stat,Alpha sig.,Mkt-RF beta,Mkt-RF t,SMB beta,SMB t,HML beta,HML t,RMW beta,RMW t,CMA beta,CMA t,UMD beta,UMD t,Adj. R2,N (days),NW lags,Statistic,Value,Notes
+Table1_Performance,Regime-conditioned momentum,9.94,6.71,0.8374,0.7771,-14.1,-0.419,8.5,2.68,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table1_Performance,Unconditional L/S momentum,11.68,12.42,0.5919,0.5447,-63.3,-1.257,18.09,0.01,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table1_Performance,Market (buy-and-hold),11.6,16.22,0.4483,0.4017,-54.6,-0.491,15.6,0.01,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table1_Performance,60/40,8.69,9.73,0.4483,0.4017,-35.5,-0.496,15.6,0.01,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table2_CrashMDD,,,,,,,,,,2008 GFC,-5.1,-57.1,52.0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table2_CrashMDD,,,,,,,,,,2020 Covid,-8.6,-33.4,24.8,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table2_CrashMDD,,,,,,,,,,2000 Dot-com,-2.3,-28.5,26.2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table2_CrashMDD,,,,,,,,,,1973 Oil Bear,-8.4,-14.8,6.4,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table2_CrashMDD,,,,,,,,,,1987 Black Mon.,-2.5,-14.7,12.2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Table3_Subperiod,,,,,,,,,,,,,,"1963-1990 (crisis-rich: oil shock, Black Monday)",1.0916,1.1238,-0.0322,Uncond leads,12.23,5.17,15.28,7.74,,,,,,,,,,,,,,,,,,,,,,
+Table3_Subperiod,,,,,,,,,,,,,,1990-2010 (dot-com bust + GFC),1.0556,0.5303,0.5253,Regime leads,9.48,5.47,11.41,14.52,,,,,,,,,,,,,,,,,,,,,,
+Table3_Subperiod,,,,,,,,,,,,,,"2010-2026 (post-GFC, low-vol era)",0.5578,0.3078,0.25,Regime leads,6.8,9.66,6.16,15.44,,,,,,,,,,,,,,,,,,,,,,
+Table4_Regressions,Unconditional L/S momentum,,,,,,,,,,,,,,,,,,,,,,CAPM,8.001,4.339,***,-0.0893,-2.68,,,,,,,,,,,0.0135,15813.0,21.0,,,
+Table4_Regressions,Unconditional L/S momentum,,,,,,,,,,,,,,,,,,,,,,FF5+Mom,-0.003,-1.0,,0.0,0.992,-0.0,-0.729,0.0,0.997,0.0,0.96,-0.0,-0.997,1.0,99029.238,1.0,15813.0,21.0,,,
+Table4_Regressions,Regime-conditioned momentum,,,,,,,,,,,,,,,,,,,,,,CAPM,5.235,5.209,***,0.0524,6.487,,,,,,,,,,,0.016,15813.0,21.0,,,
+Table4_Regressions,Regime-conditioned momentum,,,,,,,,,,,,,,,,,,,,,,FF5+Mom,2.953,3.348,***,0.0685,6.255,0.0123,0.799,0.0852,3.878,-0.0421,-1.542,-0.1371,-5.33,0.3221,12.913,0.34,15813.0,21.0,,,
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,IS excess Sharpe — regime-conditioned,0.8374,Full sample 1963-2026; excess return; net of cost
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,IS excess Sharpe — unconditional L/S,0.5919,Full sample 1963-2026; excess return; net of cost
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,OOS excess Sharpe — regime-conditioned,0.7771,"58 annual walk-forward folds, expanding window, 21-day embargo. NOTE: prompt cited 0.892 -- no saved series reproduces this; using certified 0.7771 from metrics_oos.csv."
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Sharpe difference (regime minus uncond.),0.2454,Excess-return basis
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Ledoit-Wolf (2008) HAC t-statistic,1.73,Newey-West HAC; excess returns; H0: SR_regime = SR_uncond
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Ledoit-Wolf p-value (two-tailed),0.084,NOT significant at 5%. Marginally significant at 10%.
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Block-bootstrap 95% CI lower,-0.0671,Politis-Romano stationary bootstrap; block length 10d; N=2000 resamples; seed=42
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Block-bootstrap 95% CI upper,0.5296,CI straddles zero -- consistent with LW p=0.084
+Table5_Inference,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"Factor alpha (regime, FF5+Mom, NW HAC)",2.953,% p.a.; t=3.348***; UMD beta=0.322; adj R2=0.34. Caveat: constant-loading OLS misspecified (time-varying exposure).
