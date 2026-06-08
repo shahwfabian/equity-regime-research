@@ -112,73 +112,78 @@ def fig1_regime_timeline(
     apply_style()
 
     md = _load_market_daily()
-    # Align to momentum_core window
     rets = _load_returns()
     md = md.reindex(rets.index)
-
     regime = _load_regime()
 
-    # Cumulative market level (EXCESS return for consistency)
     mkt_excess = md["mkt_ret"].fillna(0) - md["rf"].fillna(0)
     cum_mkt = (1 + mkt_excess).cumprod()
-
-    # Realised vol
     rvol = md["realized_vol_21"].ffill()
 
+    # ── Fixed wide landscape size — never let style.fig_size shrink this ─────
     fig, axes = plt.subplots(
         2, 1,
-        figsize=fig_size(two_col=two_col, aspect=0.60),
-        gridspec_kw={"height_ratios": [3, 1.5], "hspace": 0.08},
+        figsize=(12, 7),
+        gridspec_kw={"height_ratios": [2, 1], "hspace": 0.10},
+        sharex=True,
     )
+    fig.subplots_adjust(top=0.88, bottom=0.08, left=0.07, right=0.97)
 
     # ── Panel A: cumulative market level ─────────────────────────────────────
     ax = axes[0]
     shade_regimes(ax, regime, alpha=0.28, label=True)
     ax.semilogy(cum_mkt.index, cum_mkt.values,
-                color=COLORS["market_bah"], linewidth=1.0,
-                label="Market (excess return, log scale)")
+                color=COLORS["market_bah"], linewidth=1.2,
+                label="Market excess return (log scale)")
 
-    # Crash episode labels
-    for label, span in CRASH_WINDOWS.items():
-        t0, t1 = pd.Timestamp(span["start"]), pd.Timestamp(span["end"])
+    # Crash labels: short tags placed at top of axes via axvline + text
+    CRASH_TAGS = {
+        "1973 Oil\nShock":    {"start": "1973-01-01", "end": "1975-01-01"},
+        "1987 Black\nMonday": {"start": "1987-07-01", "end": "1988-01-01"},
+        "2000 Dot-\ncom":     {"start": "2000-03-01", "end": "2002-12-01"},
+        "2008\nGFC":          {"start": "2007-10-01", "end": "2009-06-01"},
+        "2020\nCovid":        {"start": "2020-02-01", "end": "2020-09-01"},
+    }
+    for tag, span in CRASH_TAGS.items():
+        t0 = pd.Timestamp(span["start"])
+        t1 = pd.Timestamp(span["end"])
         mid = t0 + (t1 - t0) / 2
         ax.axvline(mid, color=COLORS["crash_marker"],
-                   linewidth=0.5, linestyle=":", alpha=0.55, zorder=1)
-        ax.text(mid, ax.get_ylim()[1] * 0.5 if ax.get_ylim()[1] > 1 else 1,
-                label, fontsize=5.5, color=COLORS["crash_marker"],
-                ha="center", va="bottom", alpha=0.8,
-                transform=ax.get_xaxis_transform(),
-                rotation=0)
+                   linewidth=0.6, linestyle=":", alpha=0.55, zorder=1)
+        # Use axes-fraction y so label sits just above the plot area
+        ax.annotate(
+            tag,
+            xy=(mid, 1.01),
+            xycoords=("data", "axes fraction"),
+            fontsize=7, color=COLORS["crash_marker"],
+            ha="center", va="bottom", alpha=0.85,
+        )
 
-    ax.set_ylabel("Cumulative growth (log)", labelpad=4)
+    ax.set_ylabel("Cumulative growth (log scale)", labelpad=5)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(
         lambda y, _: f"{y:.0f}x" if y >= 10 else f"{y:.1f}x"
     ))
     tidy_legend(ax, loc="upper left", ncol=2)
-    ax.set_xticklabels([])
 
     # ── Panel B: realised vol + threshold ────────────────────────────────────
     ax2 = axes[1]
     shade_regimes(ax2, regime, alpha=0.28)
     ax2.plot(rvol.index, rvol.values * 100,
-             color=COLORS["reference"], linewidth=0.8,
-             label="Realised vol (21d, ann.)")
-
-    # Expanding 75th-pct threshold (for illustration — already used for regime)
+             color=COLORS["reference"], linewidth=0.9,
+             label="Realised vol (21-day, ann.)")
     threshold = rvol.expanding().quantile(0.75).shift(1) * 100
     ax2.plot(threshold.index, threshold.values,
-             color=COLORS["crash_marker"], linewidth=0.7, linestyle="--",
-             label="75th-pct threshold", alpha=0.8)
+             color=COLORS["crash_marker"], linewidth=0.8, linestyle="--",
+             label="75th-pct threshold", alpha=0.85)
 
-    ax2.set_ylabel("Realised vol (%)", labelpad=4)
+    ax2.set_ylabel("Ann. vol (%)", labelpad=5)
     ax2.set_xlabel("")
     ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda y, _: f"{y:.0f}"))
     tidy_legend(ax2, loc="upper left", ncol=2)
 
-    # Shared x-axis formatting
-    for ax_i in axes:
-        ax_i.xaxis.set_major_locator(mticker.MaxNLocator(nbins=8, prune="both"))
-        ax_i.tick_params(axis="x", rotation=0)
+    # x-axis ticks on lower panel only (sharex=True)
+    ax2.xaxis.set_major_locator(mticker.MaxNLocator(nbins=10, prune="both"))
+    ax2.tick_params(axis="x", rotation=0)
 
     fig.align_ylabels(axes)
 
@@ -451,18 +456,20 @@ def fig5_rolling_sharpe(
                 label=LABELS[name],
                 **LINES[name])
 
-    # Full-sample Sharpe reference lines
-    for name, sr_val, yoff in [
-        ("regime_momentum", 0.8374, +0.05),
-        ("long_short_momentum", 0.5919, -0.08),
+    # Full-sample Sharpe reference lines — labels anchored to LEFT margin
+    for name, sr_val, va in [
+        ("regime_momentum",    0.8374, "bottom"),
+        ("long_short_momentum", 0.5919, "top"),
     ]:
         ax.axhline(sr_val, color=COLORS[name], linewidth=0.8,
                    linestyle="--", alpha=0.6)
         ax.text(
-            rets[name].dropna().index[-1],
-            sr_val + yoff,
-            f"Full-sample SR={sr_val:.3f}",
-            fontsize=5.5, color=COLORS[name], ha="right", va="bottom",
+            0.01, sr_val,
+            f" SR={sr_val:.3f}",
+            transform=ax.get_yaxis_transform(),   # x in axes fraction, y in data
+            fontsize=6, color=COLORS[name],
+            ha="left", va=va,
+            bbox=dict(facecolor="white", alpha=0.8, edgecolor="none", pad=1),
         )
 
     ax.axhline(0, color=COLORS["zero_line"], linewidth=0.5, linestyle="-")
@@ -512,7 +519,8 @@ def fig6_return_distribution(
         r = rets[name].dropna()
         monthly[name] = r.resample("ME").sum()
 
-    fig, ax = plt.subplots(figsize=fig_size(two_col=two_col, aspect=0.90))
+    # Wider figure so annotation box never clips
+    fig, ax = plt.subplots(figsize=(6.5, 5.5))
 
     bin_edges = np.linspace(-0.30, 0.30, 55)
     x_grid    = np.linspace(-0.35, 0.35, 400)
@@ -523,40 +531,38 @@ def fig6_return_distribution(
         color = COLORS[name]
         label = LABELS[name]
 
-        # Histogram (semi-transparent)
         ax.hist(r, bins=bin_edges, density=True,
                 color=color, alpha=0.25, linewidth=0)
 
-        # KDE
         kde = gaussian_kde(r, bw_method="silverman")
         ax.plot(x_grid, kde(x_grid), color=color, linewidth=1.5,
                 label=label, **{k: v for k, v in LINES[name].items()
                                 if k == "linestyle"})
 
-        # Mean and 5% VaR
         mean_r = r.mean()
         var5   = np.percentile(r, 5)
         ax.axvline(mean_r, color=color, linewidth=0.8, linestyle="-", alpha=0.8)
-        ax.axvline(var5, color=color, linewidth=0.8, linestyle=":", alpha=0.8)
+        ax.axvline(var5,   color=color, linewidth=0.8, linestyle=":", alpha=0.8)
 
-        # Stats annotation
-        sk  = _skew(r)
-        ku  = _kurt(r)           # excess kurtosis
+        sk = _skew(r)
+        ku = _kurt(r)
+        # Use short strategy name to prevent clipping
+        short_label = "Regime-cond. momentum" if "regime" in name else "Uncond. L/S momentum"
         stats_text_parts.append(
-            f"{label[:24]}\n"
+            f"{short_label}\n"
             f"  Mean={mean_r*100:.2f}%  VaR5={var5*100:.1f}%\n"
             f"  Skew={sk:.2f}  Ex-kurt={ku:.1f}"
         )
 
     ax.axvline(0, color="black", linewidth=0.5, alpha=0.4)
 
-    # Stats box
+    # Stats box — anchored inside left edge to avoid right-side clipping
     stats_text = "\n\n".join(stats_text_parts)
-    ax.text(0.97, 0.97, stats_text,
+    ax.text(0.02, 0.97, stats_text,
             transform=ax.transAxes,
-            fontsize=5.5, va="top", ha="right",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                      edgecolor="0.75", linewidth=0.5, alpha=0.9))
+            fontsize=6, va="top", ha="left",
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
+                      edgecolor="0.75", linewidth=0.5, alpha=0.92))
 
     ax.set_xlabel("Monthly excess return", labelpad=4)
     ax.set_ylabel("Density", labelpad=4)
@@ -699,31 +705,32 @@ def figA1_mean_reversion_costs(
         cum = (1 + r).cumprod()
         ax.semilogy(cum.index, cum.values,
                     color=color, linestyle=ls, linewidth=lw, label=label)
-        # Annotate terminal SR
         sr = r.mean() / r.std() * TRADING_DAYS ** 0.5
         ax.annotate(
             f"SR={sr:.2f}",
             xy=(cum.index[-1], cum.iloc[-1]),
             xytext=(5, 0), textcoords="offset points",
-            fontsize=5.5, color=color, va="center",
+            fontsize=6, color=color, va="center",
         )
 
-    # Big red warning
-    ax.text(0.5, 0.97,
+    # Legend first — upper left
+    tidy_legend(ax, loc="upper left")
+
+    # UNIMPLEMENTABLE warning — lower centre, well below the legend
+    ax.text(0.5, 0.18,
             "UNIMPLEMENTABLE: gross SR=1.93 is a factor-level artifact.\n"
-            "Underlying stock-level turnover (~24 round-trips/yr) is invisible\n"
-            "to the factor-return engine. Appendix only.",
-            transform=ax.transAxes, fontsize=5.8, ha="center", va="top",
+            "Stock-level turnover (~24 round-trips/yr) is invisible to the\n"
+            "factor-return engine. Appendix illustrative only.",
+            transform=ax.transAxes, fontsize=6, ha="center", va="top",
             color="#AA0000", style="italic",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="#FFF0F0",
-                      edgecolor="#AA0000", linewidth=0.7))
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="#FFF0F0",
+                      edgecolor="#AA0000", linewidth=0.8))
 
     ax.set_ylabel("Cumulative growth of $1 (log, excess return)", labelpad=4)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(
         lambda y, _: f"${y:.0f}" if y >= 10 else f"${y:.1f}"
     ))
     ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=9, prune="both"))
-    tidy_legend(ax, loc="upper left")
 
     caption = (
         "Figure A1 (Appendix). Mean-reversion strategy: gross versus stock-level "
